@@ -57,6 +57,8 @@ def get_article_data(data_dir, body_text_dict):
         return stances, headlines, bodies
 
 
+# Create a class that initializes the header body text, stances, tokenizer and max length
+# The class creates an encoding for the data using the parameters selected and returns the encoding
 class FNCDataSet(Dataset):
 
     def __init__(self, hb_text, stances, tokenizer, max_len):
@@ -72,6 +74,7 @@ class FNCDataSet(Dataset):
         hb_text = str(self.hb_text[item])
         stances = self.stances[item]
 
+        # Create encoding
         encoding = self.tokenizer.encode_plus(
             hb_text,
             add_special_tokens=True,
@@ -91,6 +94,7 @@ class FNCDataSet(Dataset):
         }
 
 
+# Method to use the FNCDataSet class and get the encodings wrapped in a Data Loader
 def create_data_loader(df, tokenizer, max_len, batch_size):
     ds = FNCDataSet(
         hb_text=df['hb'].to_numpy(),
@@ -106,6 +110,8 @@ def create_data_loader(df, tokenizer, max_len, batch_size):
     )
 
 
+# Create a classifier class that instiates the BERT model, tuned dropout rates for regularization and obtain a fully
+# connected layer for the output as well as cross entropy
 class NewsClassifier(nn.Module):
 
     def __init__(self, n_classes):
@@ -123,6 +129,9 @@ class NewsClassifier(nn.Module):
         return self.out(output)
 
 
+# Method used for training each epoch
+# Uses dataloader and saves values to GPU and takes outputs and uses the
+# argmax function to get predictions
 def train_epoch(
         model,
         data_loader,
@@ -147,6 +156,7 @@ def train_epoch(
             attention_mask=attention_mask
         )
 
+        # Get predictions and loss
         _, preds = torch.max(outputs, dim=1)
         loss = loss_fn(outputs, stances)
 
@@ -154,6 +164,7 @@ def train_epoch(
         losses.append(loss.item())
 
         loss.backward()
+        # clip gradients
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         scheduler.step()
@@ -162,6 +173,8 @@ def train_epoch(
     return correct_predictions.double() / n_examples, np.mean(losses)
 
 
+# Helper method to evalute model using the data loaders
+# Returm accuracy by comparing the predictions to the correct stances/targets
 def eval_model(model, data_loader, loss_fn, device, n_examples):
     model = model.eval()
 
@@ -202,15 +215,18 @@ def train_data(data_dir):
     data_df['s_int'] = data_df.apply(lambda row: stance_map.get(row['s']), axis=1)
 
     print("Splitting data")
+    # Get the training set and validation set using train_test_split
     df_train, df_val = train_test_split(data_df, test_size=0.1, random_state=RANDOM_SEED)
 
     print("Creating tokenizer")
     tokenizer = BertTokenizer.from_pretrained(PRE_TRAINED_MODEL_NAME)
 
     print("Creating training and validation data loaders")
+    # Instatiate training data loader and validation data loader
     train_data_loader = create_data_loader(df_train, tokenizer, MAX_LENGTH, BATCH_SIZE)
     val_data_loader = create_data_loader(df_val, tokenizer, MAX_LENGTH, BATCH_SIZE)
 
+    # Gather data using the training data loader and check sizes if the input ids, attention mask and stances (targets)
     data = next(iter(train_data_loader))
     print("Keys in training data loader to model: {}".format(data.keys()))
 
@@ -220,6 +236,7 @@ def train_data(data_dir):
     print("Stances (targets) size: {}".format(data['stances'].shape))
 
     print("Instantiating news classifier")
+    # Create an instance of the classifier and use the GPU
     model = NewsClassifier(len(stance_map))
     model = model.to(device)
 
@@ -240,7 +257,14 @@ def train_data(data_dir):
     loss_fn = nn.CrossEntropyLoss().to(device)
 
     # TRAINING BERT MODEL
+    # Start the training processes using the BERT model and AdamW optimizer from Hugging Face
+    # using some of the recommended parameters for fine tuning:
+    # Batch size: 16, 32
+    # Learning rate (Adam): 5e-5, 3e-5, 2e-5
+    # Number of epochs: 2, 3, 4
+
     print("Training the bert model")
+    # Run model by taking the history and best accuracy for all epochs and using helper methods
     history = defaultdict(list)
     best_accuracy = 0
 
@@ -281,6 +305,7 @@ def train_data(data_dir):
             torch.save(model.state_dict(), 'best_model_state2.bin')
             best_accuracy = val_acc
 
+    # Gather training accuracies and validation accuracies from training set
     history['train_acc'][0].item()
 
     train_acc_list = []
@@ -297,6 +322,8 @@ def train_data(data_dir):
     return model, tokenizer, loss_fn
 
 
+# Helper function to get predictions from model and test data loader
+# This function also uses the softmax function for getting probability distributions
 def get_predictions(model, data_loader):
     model = model.eval()
 
@@ -333,6 +360,7 @@ def get_predictions(model, data_loader):
 
 def test_data(data_dir, model, tokenizer, loss_fn):
     print("Reading in test data")
+    # Read in test data (headline, body, stances/targets)
     test_stances_path = data_dir + "/competition_test_stances.csv"
     test_body_path = data_dir + "/competition_test_bodies.csv"
 
@@ -348,6 +376,7 @@ def test_data(data_dir, model, tokenizer, loss_fn):
     print("Creating test data loader")
     test_data_loader = create_data_loader(test_data_df, tokenizer, MAX_LENGTH, BATCH_SIZE)
 
+    # Determine accuracy of model on the test data
     test_acc, _ = eval_model(
         model,
         test_data_loader,
@@ -359,6 +388,7 @@ def test_data(data_dir, model, tokenizer, loss_fn):
     print(f'Model on test accuracy: {test_acc.item()}')
 
     print("Getting predictions for test data using model")
+    # Use the helper function to get probabilities on the test data and return the headline body text
     y_hb_texts, y_pred, y_pred_probs, y_test = get_predictions(
         model,
         test_data_loader
