@@ -6,22 +6,21 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 from keras.utils import np_utils
 from sklearn.model_selection import train_test_split
-from keras.layers import Dot, Concatenate, Input, Dropout, Dense
+from keras.layers import Concatenate, Input, Dropout, Dense
 from keras.models import Model
 
+MAX_SENT_LEN = 150
+MAX_VOCAB_SIZE = 30000
+BATCH_SIZE = 200
+HIDDEN_DIM = 100
+N_EPOCHS = 10
 TEST_SPLIT_SIZE = 0.2
 FEATURE_LIMIT = 5000
-MAX_SENT_LENGTH = 150
-MAX_VOCAB_SIZE = 35000
-LSTM_DIM = 128
-EMBEDDING_DIM = 300
-BATCH_SIZE = 128
-N_EPOCHS = 10
 
 stance_map = {'agree': 0, 'disagree': 1, 'discuss': 2, 'unrelated': 3}
 stance_map_inv = {0: 'agree', 1: 'disagree', 2: 'discuss', 3: 'unrelated'}
 
-
+# Reads _bodies.csv file and creates a dictionary from Body ID -> Body Text
 def get_body_dict(data_dir):
     with open(data_dir, encoding='utf_8') as tb:
         train_bodies = list(csv.reader(tb))
@@ -33,7 +32,7 @@ def get_body_dict(data_dir):
 
     return train_bodies_dict
 
-
+# Reads _stances.csv file and returns headline, body, stance data
 def get_article_data(data_dir, train_bodies_dict):
     with open(data_dir, encoding='utf_8') as ts:
         train_stances = list(csv.reader(ts))
@@ -61,17 +60,22 @@ def main(data_dir):
                                                                  competition_bodies_dict)
 
     print('Initializing TFIDF Vectorizer...')
+    # Converts collection of raw documents to a TF-IDF matrix
     vectorizer = TfidfVectorizer(max_features=FEATURE_LIMIT)
+    # Builds vocabulary from training set
     vectorizer.fit(train_headlines + train_bodies)
 
     print('Vectorizing Data...')
+    # Transform documents to document-term matrix
     x_train_headlines = vectorizer.transform(train_headlines).toarray()
     x_train_bodies = vectorizer.transform(train_bodies).toarray()
     x_test_headlines = vectorizer.transform(test_headlines).toarray()
     x_test_bodies = vectorizer.transform(test_bodies).toarray()
 
     print('Encoding Stances...')
+    # Fit encoder and return encoded labels
     encoded_train_stances = LabelEncoder().fit_transform(train_stances)
+    # Transform labels to binary class matrix
     y_train = np_utils.to_categorical(encoded_train_stances, num_classes=4)
     encoded_test_stances = LabelEncoder().fit_transform(test_stances)
     y_test = np_utils.to_categorical(encoded_test_stances, num_classes=4)
@@ -80,14 +84,19 @@ def main(data_dir):
     x_train_headlines, x_val_headlines, x_train_bodies, x_val_bodies, y_train, y_val = train_test_split(
         x_train_headlines, x_train_bodies, y_train, test_size=TEST_SPLIT_SIZE)
 
-    print('Building Model...')
+    print('Building Model I/O...')
+    # Define model input for headlines
     input_headlines = Input(shape=(FEATURE_LIMIT,), name='input_headlines')
+    # Define model input for bodies
     input_bodies = Input(shape=(FEATURE_LIMIT,), name='input_bodies')
-    dotted = Dot(-1)([input_headlines, input_bodies])
-    concatenated_input = Concatenate()([input_headlines, dotted, input_bodies])
+    # Concatenate list of inputs
+    concatenated_input = Concatenate()([input_headlines, input_bodies])
 
-    hidden = Dense(100, activation='sigmoid', name='dense_layer')(concatenated_input)
+    # Add hidden layer
+    hidden = Dense(HIDDEN_DIM, activation='sigmoid', name='dense_layer')(concatenated_input)
+    # Add dropout layer
     hidden = Dropout(rate=0.6, name='dropout_layer')(hidden)
+    # Add output layer
     out = Dense(4, activation='softmax', name='output_layer')(hidden)
 
     model = Model(inputs=[input_headlines, input_bodies], outputs=out)
