@@ -26,9 +26,8 @@ MAX_LENGTH = 160
 BATCH_SIZE = 16
 EPOCHS = 2
 
-# NOTE: You can find commented explanations and visualizations in the notebook:
+# NOTE: You can find commented explanations and visualizations in the bert.ipynb file
 # This is just the python script for training the model on the training set and obtaining predictions from the test set
-# https://colab.research.google.com/drive/1guzzGgdgwQv9Xyz0Aka9qS2fS17LCZPV#scrollTo=3aPwMv_vKx7c
 def get_body_dict(data_dir):
     with open(data_dir, encoding='utf_8') as tb:
         body_text = list(csv.reader(tb))
