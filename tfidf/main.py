@@ -6,11 +6,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
 from keras.utils import np_utils
 from sklearn.model_selection import train_test_split
-from keras.layers import Concatenate, Input, Dropout, Dense
+from keras.layers import Concatenate, Input, Dropout, Dense, Dot
 from keras.models import Model
 
-MAX_SENT_LEN = 150
-MAX_VOCAB_SIZE = 30000
 BATCH_SIZE = 200
 HIDDEN_DIM = 100
 N_EPOCHS = 10
@@ -89,8 +87,10 @@ def main(data_dir):
     input_headlines = Input(shape=(FEATURE_LIMIT,), name='input_headlines')
     # Define model input for bodies
     input_bodies = Input(shape=(FEATURE_LIMIT,), name='input_bodies')
+    # Compute cosine similarity matrix
+    cosine_similarity = Dot(axes=-1)([input_headlines, input_bodies])
     # Concatenate list of inputs
-    concatenated_input = Concatenate()([input_headlines, input_bodies])
+    concatenated_input = Concatenate()([input_headlines, input_bodies, cosine_similarity])
 
     # Add hidden layer
     hidden = Dense(HIDDEN_DIM, activation='sigmoid', name='dense_layer')(concatenated_input)
