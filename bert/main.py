@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 from collections import defaultdict
 
-from torch import nn, optim
+from torch import nn
 from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
 
@@ -210,7 +210,7 @@ def train_data(data_dir):
 
     data_df = pd.DataFrame(list(zip(h, b, s)), columns=['h', 'b', 's'])
 
-    data_df['hb'] = data_df['h'] + '[SEP]' + data_df['b']
+    data_df['hb'] = '[CLS]' + data_df['h'] + '[SEP]' + data_df['b'] + '[SEP]'
     data_df['s_int'] = data_df.apply(lambda row: stance_map.get(row['s']), axis=1)
 
     print("Splitting data")
@@ -368,7 +368,7 @@ def test_data(data_dir, model, tokenizer, loss_fn):
 
     test_data_df = pd.DataFrame(list(zip(htest, btest, stest)), columns=['h', 'b', 's'])
 
-    test_data_df['hb'] = test_data_df['h'] + '[SEP]' + test_data_df['b']
+    test_data_df['hb'] = '[CLS]' + test_data_df['h'] + '[SEP]' + test_data_df['b'] + '[SEP]'
     test_data_df['s_int'] = test_data_df.apply(lambda row: stance_map.get(row['s']), axis=1)
 
     # Creating test data loader
